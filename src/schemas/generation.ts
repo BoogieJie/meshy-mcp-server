@@ -36,10 +36,19 @@ const hdTexture = () =>
     .describe("DEPRECATED — use texture_resolution instead (hd_texture: true is exactly texture_resolution: '4k'). Kept for backward compatibility.");
 const textureResolution = () =>
   z.nativeEnum(TextureResolution).optional()
-    .describe("Base color texture resolution: '2k' (default), '4k', or '8k'. 8K costs 15 credits instead of 10 — confirm with the user before selecting it. Only supported on meshy-6 / meshy-7 / latest / smart-topology; PBR maps stay at 2K. Replaces the deprecated hd_texture flag.");
+    .describe("Base color texture resolution: 2k (default), 4k, or 8k. Supported on meshy-6 / meshy-7 / meshy-7.1 / latest / smart-topology. PBR maps stay at 2K. Replaces hd_texture; confirm current texturing cost before submitting.");
 const multiViewThumbnails = () =>
   z.boolean().optional()
     .describe("Also return 4 cardinal-view thumbnails (front/back/left/right). Default false.");
+const geometryResolution = () =>
+  z.enum(["standard", "2k", "4k"]).optional()
+    .describe("Meshy 7.1 geometry pass: standard, 2k, or 4k. Requires meshy-7.1/latest and standard model type. Confirm additional cost before higher-detail passes.");
+const deprecatedUltraMode = () =>
+  z.boolean().optional()
+    .describe("DEPRECATED — prefer geometry_resolution. true is equivalent to the 2k geometry pass; cannot conflict with geometry_resolution or be used with Smart Topology/lowpoly.");
+const lightingRemoval = () =>
+  z.boolean().optional()
+    .describe("Lighting removal for Meshy 6 only. Omitted values are left to the API default; not automatically sent with latest or Meshy 7.1.");
 const deprecatedSymmetryMode = () =>
   z.nativeEnum(SymmetryMode).optional()
     .describe("DEPRECATED — no longer affects output (kept for backward compatibility). Values: 'off', 'auto', 'on'.");
@@ -54,12 +63,14 @@ import {
  */
 export const TextTo3DInputSchema = z.object({
   prompt: PromptSchema,
-  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.LATEST])
-    .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default). NOTE: text-to-3d does NOT accept 'meshy-7', and its 'latest' still resolves to Meshy 6 (unlike image-to-3d, where latest is Meshy 7). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
-  model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
+  ai_model: z.union([z.nativeEnum(AIModel), z.literal(SmartTopologyModel.MESHY_T2)])
     .optional()
-    .describe("Model type: 'standard' or 'lowpoly' (smart-topology is image-to-3d only). When 'lowpoly', ai_model/topology/target_polycount/should_remesh are ignored"),
+    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy standard IDs remain accepted. Smart Topology: meshy-t2 with model_type smart-topology. Omitted model defaults to latest for standard or T2 for Smart Topology. Confirm model choice and current cost before generation."),
+  model_type: z.nativeEnum(ModelType)
+    .optional()
+    .describe("standard (default), smart-topology (T2, triangle-only), or deprecated lowpoly. Smart Topology ignores remesh and adaptive-decimation controls."),
+  geometry_resolution: geometryResolution(),
+  ultra_mode: deprecatedUltraMode(),
   topology: z.nativeEnum(Topology)
     .optional()
     .describe("Mesh topology type (quad or triangle)"),
@@ -68,12 +79,12 @@ export const TextTo3DInputSchema = z.object({
     .min(100, "Polycount must be at least 100")
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
-    .describe("Target polygon count for the model (100–300,000)"),
+    .describe("Standard remesh target: 100–300,000 faces. Supported T2 routes generate directly at 100–15,000 faces (default 4,000)."),
   decimation_mode: decimationMode(),
   symmetry_mode: deprecatedSymmetryMode(),
   should_remesh: z.boolean()
     .optional()
-    .describe("Whether to remesh. Default false for meshy-6, true for others"),
+    .describe("Enable standard remeshing to apply a target count. Defaults false for Meshy 6/7/7.1. Ignored on Smart Topology routes."),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
@@ -103,13 +114,12 @@ export const ImageTo3DInputSchema = z.object({
     .describe("Chain from a SUCCEEDED text-to-image or image-to-image task: use its generated image as the input instead of image_url/file_path. Provide only one image source."),
   ai_model: z.union([z.nativeEnum(AIModel), z.nativeEnum(SmartTopologyModel)])
     .optional()
-    .describe("AI model. Standard generation: 'meshy-5', 'meshy-6', 'meshy-7', or 'latest' (default — resolves to Meshy 7 here). Smart Topology generation (set model_type: 'smart-topology'): 'meshy-t2' (default, recommended — native part separation) or 'meshy-t1'. IMPORTANT: Before calling this tool, ask the user which model to use and explain the trade-off: meshy-7/latest = best quality (20 credits mesh, 30 textured); meshy-t2 smart-topology = clean part-separated geometry and much cheaper (5 credits mesh, 15 textured); meshy-5 = previous gen (5 credits). NOTE: passing remove_lighting with 'latest' keeps the task on Meshy 6."),
-  ultra_mode: z.boolean()
-    .optional()
-    .describe("Meshy 7 Ultra — run the extra high-detail geometry pass (+5 credits). Only valid when the task actually runs Meshy 7: pass ai_model 'meshy-7' explicitly (reliable), or 'latest' while latest resolves to Meshy 7. On meshy-5/meshy-6 the API returns 400. Single-image only — not available on multi-image-to-3d. Cannot be combined with model_type 'lowpoly'. Confirm the extra cost with the user first."),
+    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy IDs remain accepted. Smart Topology: meshy-t2 (default) or legacy meshy-t1 with model_type smart-topology. Confirm model choice and current cost before generation."),
+  geometry_resolution: geometryResolution(),
+  ultra_mode: deprecatedUltraMode(),
   model_type: z.nativeEnum(ModelType)
     .optional()
-    .describe("Model type: 'standard' (default), 'smart-topology' (part-separated geometry via meshy-t1/meshy-t2, much cheaper), or 'lowpoly' (deprecated — prefer smart-topology)"),
+    .describe("Model type: 'standard' (default), 'smart-topology' (part-separated geometry via meshy-t1/meshy-t2), or deprecated 'lowpoly'. Prefer Smart Topology for controllable lower-poly generation; confirm current costs."),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
@@ -124,11 +134,11 @@ export const ImageTo3DInputSchema = z.object({
     .min(100, "Polycount must be at least 100")
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
-    .describe("Target polygon count for the model (100–300,000)"),
+    .describe("Standard remesh target: 100–300,000 faces. Supported T2 routes generate directly at 100–15,000 faces (default 4,000)."),
   decimation_mode: decimationMode(),
   should_remesh: z.boolean()
     .optional()
-    .describe("Whether to remesh. Default false for meshy-6, true for others"),
+    .describe("Enable standard remeshing to apply a target count. Defaults false for Meshy 6/7/7.1. Ignored on Smart Topology routes."),
   symmetry_mode: deprecatedSymmetryMode(),
   should_texture: z.boolean()
     .optional()
@@ -144,10 +154,8 @@ export const ImageTo3DInputSchema = z.object({
   hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
-    .describe("Optimize input image for better results. Default true. Meshy-6/latest only"),
-  remove_lighting: z.boolean()
-    .default(true)
-    .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+    .describe("Optimize input image. Supported on meshy-6, meshy-7.1, and latest. Set false to preserve deliberate source styling."),
+  remove_lighting: lightingRemoval(),
   save_pre_remeshed_model: z.boolean()
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),
@@ -180,14 +188,12 @@ export const TextTo3DRefineInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
-  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.LATEST])
-    .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default). NOTE: text-to-3d does NOT accept 'meshy-7' and its 'latest' still resolves to Meshy 6. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
+  ai_model: z.nativeEnum(AIModel)
+    .optional()
+    .describe("Refine model override: meshy-7.1/latest or a legacy standard model. Omit to inherit the preview model. Do not pass T2 as a refine override; confirm texturing cost before submitting."),
   texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
-  remove_lighting: z.boolean()
-    .default(true)
-    .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+  remove_lighting: lightingRemoval(),
   target_formats: TargetFormatsSchema,
   alpha_thumbnail: alphaThumbnail(),
   auto_size: z.boolean()
@@ -216,12 +222,15 @@ export const MultiImageTo3DInputSchema = z.object({
   input_task_id: z.string()
     .optional()
     .describe("Chain from a SUCCEEDED text-to-image / image-to-image task that produced multi-view images, using them as the input instead of image_urls/file_paths."),
-  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST])
+  ai_model: z.nativeEnum(AIModel)
     .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', 'meshy-7', or 'latest' (default — resolves to Meshy 7). Smart Topology (meshy-t1/meshy-t2) and ultra_mode are single-image-only and NOT available here. IMPORTANT: Before calling this tool, ask the user which model to use: meshy-7/latest = best quality (20 credits mesh, 30 textured), meshy-5 = previous gen (5 credits)"),
+    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy IDs remain accepted. Smart Topology is not supported here. Confirm model choice and current cost first."),
+  geometry_resolution: z.enum(["standard", "2k"]).optional()
+    .describe("Meshy 7.1 multi-image geometry pass: standard or 2k only. Confirm extra cost before using 2k."),
+  ultra_mode: deprecatedUltraMode(),
   model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
     .optional()
-    .describe("Model type: 'standard' or 'lowpoly' (smart-topology is single-image-to-3d only)"),
+    .describe("Model type: standard or deprecated lowpoly. Smart Topology is unavailable on multi-image generation."),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
@@ -236,11 +245,11 @@ export const MultiImageTo3DInputSchema = z.object({
     .min(100, "Polycount must be at least 100")
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
-    .describe("Target polygon count for the model (100–300,000)"),
+    .describe("Multi-image standard remesh target: 100–300,000 faces. Requires should_remesh true; decimation_mode takes precedence. Smart Topology is not supported on this endpoint."),
   decimation_mode: decimationMode(),
   should_remesh: z.boolean()
     .optional()
-    .describe("Whether to remesh. Default false for meshy-6, true for others"),
+    .describe("Enable standard remeshing to apply a target count. Defaults false for Meshy 6/7/7.1."),
   symmetry_mode: deprecatedSymmetryMode(),
   should_texture: z.boolean()
     .optional()
@@ -256,10 +265,8 @@ export const MultiImageTo3DInputSchema = z.object({
   hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
-    .describe("Optimize input images for better results. Default true. Meshy-6/latest only"),
-  remove_lighting: z.boolean()
-    .default(true)
-    .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+    .describe("Optimize input images. Supported on meshy-6, meshy-7.1, and latest. Set false to preserve source styling."),
+  remove_lighting: lightingRemoval(),
   save_pre_remeshed_model: z.boolean()
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),

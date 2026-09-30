@@ -22,8 +22,8 @@
 
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models
-- **Meshy 7 + Ultra (v0.5.0)**: `ai_model: "meshy-7"` on image-to-3d, multi-image-to-3d and retexture, plus `ultra_mode` for an extra high-detail geometry pass (+5 credits, single-image only)
-- **Smart Topology (v0.5.0)**: `model_type: "smart-topology"` (models `meshy-t2` / `meshy-t1`) produces part-separated geometry with a configurable polycount for **5 credits of mesh instead of 20**
+- **Meshy 7.1 generation**: `ai_model: "meshy-7.1"` or `"latest"` for text preview, single-image, and multi-image generation. `geometry_resolution: "standard" | "2k" | "4k"` selects geometry detail (multi-image supports standard/2k only). `ultra_mode` is deprecated; legacy explicit Meshy 7 single-image Ultra requests remain compatible.
+- **Smart Topology**: `model_type: "smart-topology"` with `ai_model: "meshy-t2"` on text preview and single-image generation. T2 generates triangle geometry directly at a target of 100–15,000 faces (default 4,000), without remeshing. Legacy single-image `meshy-t1` remains accepted. Multi-image does not support this route.
 - **8K Textures (v0.5.0)**: `texture_resolution: "2k" | "4k" | "8k"` on image-to-3d, multi-image-to-3d, text-to-3d refine and retexture (8K costs 15 credits vs 10). Replaces the now-deprecated `hd_texture` flag
 - **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 ordered views of the *same object* drive the texture instead of a single style reference (requires Meshy 7)
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters
@@ -40,25 +40,23 @@
 
 ### Models & Credits
 
-`ai_model` is **not** the same set on every endpoint, and `latest` does not resolve to the same model everywhere:
+Model availability is endpoint-specific. Current generation routing follows the [text](https://docs.meshy.ai/en/api/text-to-3d), [single-image](https://docs.meshy.ai/en/api/image-to-3d), and [multi-image](https://docs.meshy.ai/en/api/multi-image-to-3d) API contracts:
 
-| Endpoint | Accepted `ai_model` | `latest` resolves to |
+| Endpoint | Current route | Compatibility |
 |---|---|---|
-| `meshy_image_to_3d` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` — plus `meshy-t1` / `meshy-t2` with `model_type: "smart-topology"` | Meshy 7 |
-| `meshy_multi_image_to_3d` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` | Meshy 7 |
-| `meshy_retexture` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` | Meshy 7 |
-| `meshy_text_to_3d` / `_refine` | `meshy-5`, `meshy-6`, `latest` — **no `meshy-7`** | Meshy 6 |
+| `meshy_text_to_3d` | Standard `meshy-7.1` / `latest`; Smart Topology `meshy-t2` | Legacy standard IDs remain accepted by the tool schema |
+| `meshy_image_to_3d` | Standard `meshy-7.1` / `latest`; Smart Topology `meshy-t2` | Legacy standard IDs and single-image `meshy-t1` remain accepted |
+| `meshy_multi_image_to_3d` | Standard `meshy-7.1` / `latest` | Legacy standard IDs remain accepted; no Smart Topology |
+| `meshy_text_to_3d_refine` | Omit `ai_model` to inherit the preview; explicit standard override supported | T2 is not an explicit refine override |
+| `meshy_retexture` | Existing tool contract is unchanged by this generation update | Inspect its live schema and API documentation independently |
 
-Image-to-3D cost by model:
+`latest` currently resolves to Meshy 7.1 on the updated generation endpoints. Use an explicit model for reproducibility; retaining a legacy ID in a schema does not guarantee continued API availability.
 
-| `ai_model` | Mesh only | + texture | + 8K texture |
-|---|---|---|---|
-| `meshy-7` / `latest` | 20 | 30 | 35 |
-| `meshy-6` | 20 | 30 | 35 |
-| `meshy-t2` (smart-topology) | 5 | 15 | 20 |
-| `meshy-5` | 5 | 15 | — |
+For standard models, `target_polycount` requires `should_remesh: true` and is superseded by `decimation_mode`. For T2, it controls generation directly; remesh/decimation controls are omitted. Single-image Smart Topology also omits topology and pre-remesh controls. Text T2 rejects quad topology. Deprecated `model_type: "lowpoly"` remains accepted, but prefer Smart Topology.
 
-`ultra_mode: true` adds **+5** credits. Creative Lab is **36** credits (6 + 30) for every product except **keycap, which is 62** (12 + 50). Other tools: remesh 5, rig 5, animate 3, convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10.
+`image_enhancement` is forwarded for Meshy 6, Meshy 7.1, and `latest`. `remove_lighting` is forwarded only for explicit Meshy 6, or an explicit refine value when the model is inherited. Neither lighting removal nor higher geometry detail is silently enabled. When inheriting a legacy preview, confirm that model supports any requested texture upgrade; the server does not fetch the preview to infer compatibility. Inherited lighting removal is left for the API to apply only where supported.
+
+Costs depend on endpoint, model, geometry pass, and texture options. Check the [current API pricing](https://docs.meshy.ai/en/api/pricing) and obtain permission before generation or texturing. Older release credit examples are not a quote for Meshy 7.1/4k geometry.
 
 ## Prerequisites
 
@@ -166,7 +164,7 @@ Most clients auto-load the new server, but **Cursor and VS Code require a manual
 # Clone and install
 git clone https://github.com/meshy-dev/meshy-mcp-server.git
 cd meshy-mcp-server
-npm install
+npm ci
 
 # Development with hot reload
 npm run dev
@@ -177,9 +175,16 @@ npm run build
 # Type check
 npm run lint
 
+# Build and run offline mocked-request tests (no API key or credits required)
+npm test
+
 # Run
 npm start
 ```
+
+### Maintaining a local checkout
+
+See [setup, updates, and rollback](docs/maintenance.md) for running a reviewed local build, pinning package versions, testing model routing without paid API calls, and reconnecting a client safely.
 
 ## HTTP Transport
 

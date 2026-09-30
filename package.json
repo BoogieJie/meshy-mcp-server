@@ -12,6 +12,7 @@
     "dist/",
     "LICENSE",
     "README.md",
+    "docs/maintenance.md",
     ".env.example"
   ],
   "scripts": {
@@ -20,6 +21,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {

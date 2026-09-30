@@ -37,6 +37,7 @@ export interface TextTo3DApiRequest {
   mode: string;
   prompt: string;
   ai_model: string;
+  geometry_resolution?: "standard" | "2k" | "4k";
   moderation: boolean;
   model_type?: string;
   target_polycount?: number;
@@ -58,6 +59,7 @@ export interface ImageTo3DApiRequest {
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
+  geometry_resolution?: "standard" | "2k" | "4k";
   ultra_mode?: boolean;
   model_type?: string;
   pose_mode?: string;
@@ -86,7 +88,7 @@ export interface TextTo3DRefineApiRequest {
   mode: string;
   preview_task_id: string;
   enable_pbr: boolean;
-  ai_model: string;
+  ai_model?: string;
   texture_prompt?: string;
   texture_image_url?: string;
   texture_resolution?: string;
@@ -105,6 +107,7 @@ export interface MultiImageTo3DApiRequest {
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
+  geometry_resolution?: "standard" | "2k";
   model_type?: string;
   pose_mode?: string;
   topology?: string;

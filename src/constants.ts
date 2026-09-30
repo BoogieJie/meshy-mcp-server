@@ -46,21 +46,18 @@ export enum ModelFormat {
 
 // AI Models
 //
-// IMPORTANT — the accepted set differs PER ENDPOINT, so do not assume one enum
-// covers everything (verified against the API 2026-08-11):
-//   image-to-3d / multi-image-to-3d / retexture → meshy-5, meshy-6, meshy-7, latest
-//   text-to-3d (v2)                             → meshy-5, meshy-6, latest  (NO meshy-7)
-// `latest` also resolves differently: it is Meshy 7 on image-to-3d /
-// multi-image-to-3d / retexture, but still Meshy 6 on text-to-3d.
+// Generation endpoints support Meshy 7.1; legacy model IDs remain accepted here
+// for existing callers. Keep endpoint-specific restrictions in each schema.
 export enum AIModel {
   MESHY_5 = "meshy-5",
   MESHY_6 = "meshy-6",
   MESHY_7 = "meshy-7",
+  MESHY_7_1 = "meshy-7.1",
   LATEST = "latest"
 }
 
 // Smart Topology models — selected via model_type: "smart-topology" on
-// image-to-3d. meshy-t2 is the default and adds native part separation with a
+// image-to-3d or text preview (T2 only). meshy-t2 adds native part separation with a
 // configurable target_polycount; meshy-t1 is the previous generation.
 export enum SmartTopologyModel {
   MESHY_T1 = "meshy-t1",
