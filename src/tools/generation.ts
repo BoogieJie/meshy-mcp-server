@@ -332,7 +332,7 @@ Args:
   - texture_image_url (string, optional): Image URL to guide texturing
   - texture_resolution: "2k" (default) / "4k" / "8k". 10 credits, 15 at 8K. Not on meshy-6-lite
   - ai_model: Optional override: "meshy-7.1", "latest" (= Meshy 7.1), "meshy-6", "meshy-6-lite". Omit to inherit the preview model. T2 is not a refine override
-  - remove_lighting: Meshy 6 only; an explicit value with an inherited model is passed for the API to apply where supported
+  - remove_lighting: Meshy 6 only. With an inherited model it is passed through, so omit it when the preview used meshy-6-lite (the API rejects it there)
   - target_formats (string[], optional): Output formats. Default: all except 3mf.
   - auto_size (boolean, optional): AI auto-estimate real-world height. Default false.
   - origin_at (enum, optional): "bottom" or "center".

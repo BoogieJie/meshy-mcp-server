@@ -32,8 +32,9 @@ Topology on text, `geometry_resolution`, offline request tests).
   T2, Ultra surcharge, Creative Lab lamp split)
 - Prompt limits raised to the API's 800 characters (text-to-3d prompt, texture prompts,
   retexture `text_style_prompt`)
-- `meshy_retexture`: `enable_original_uv` is only sent when set (API default `false`, a fresh
-  unwrap), and `remove_lighting` is only sent for `meshy-6`
+- `meshy_retexture`: `enable_original_uv` still defaults to `true` for `input_task_id` (Meshy
+  UVs are reused, as before), but is no longer forced on `model_url` uploads, which now take the
+  API default `false` (fresh unwrap). `remove_lighting` is only sent for `meshy-6`
 - `meshy_analyze_printability` accepts any Meshy 6-or-newer task (Meshy 7 / 7.1 included); the
   old text said "Meshy 6 or any Preview model"
 - `meshy_repair_printability` documents that `.fbx` / `.gltf` input comes back as `.fbx` / `.gltf`
@@ -44,14 +45,15 @@ Topology on text, `geometry_resolution`, offline request tests).
   `ai_model: "meshy-7"`. The API requires that explicit id, so these calls used to 400
 - `meshy_text_to_image` with `generate_multi_view: true` no longer sends the default
   `aspect_ratio: "1:1"`. The API rejects that combination, so every multi-view call used to 400
-- `meshy_multi_image_to_3d` forwards `remove_lighting` on Meshy 7.1 / `latest`, where the API
-  honors it
+- `meshy_multi_image_to_3d` forwards `remove_lighting` for an explicit `meshy-7.1` too, not just
+  `meshy-6` / `latest`
 - `meshy_creative_lab`: lamp no longer accepts `text` (the API removed it, so these calls
   400'd), and lamp is billed 30 + 6, not 6 + 30
 
-### Removed
+### Deprecated
 
-- `meshy-5` from every model enum. The API retires it on 2026-10-10; use `meshy-6-lite`
+- `meshy-5`: still accepted (the API serves it as `meshy-6-lite`, 2K textures only) but no longer
+  advertised. The API retires it on 2026-10-10; use `meshy-6-lite`
 
 ## [0.5.2] - 2026-09-22
 

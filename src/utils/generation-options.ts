@@ -1,5 +1,8 @@
 import { AIModel, ModelType, SmartTopologyModel } from "../constants.js";
 
+/** A request the tool refuses locally; reported as-is, without recovery hints. */
+export class RequestValidationError extends Error {}
+
 type GenerationEndpoint = "text" | "image" | "multi-image";
 
 interface GenerationOptions {
@@ -20,25 +23,25 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   const smartTopology = modelType === ModelType.SMART_TOPOLOGY;
 
   if (smartTopology && model !== SmartTopologyModel.MESHY_T1 && model !== SmartTopologyModel.MESHY_T2) {
-    throw new Error("Smart Topology requires ai_model meshy-t2 (or legacy meshy-t1 on single-image generation).");
+    throw new RequestValidationError("Smart Topology requires ai_model meshy-t2 (or legacy meshy-t1 on single-image generation).");
   }
   if (isSmartModel && !smartTopology) {
-    throw new Error("Smart Topology models require model_type smart-topology.");
+    throw new RequestValidationError("Smart Topology models require model_type smart-topology.");
   }
   if (smartTopology && (endpoint === "multi-image" || (endpoint === "text" && model !== SmartTopologyModel.MESHY_T2))) {
-    throw new Error("T2 Smart Topology is supported on text preview and single-image generation only.");
+    throw new RequestValidationError("T2 Smart Topology is supported on text preview and single-image generation only.");
   }
   if (model === SmartTopologyModel.MESHY_T2 && options.target_polycount !== undefined && options.target_polycount > 15000) {
-    throw new Error("T2 target_polycount must be between 100 and 15,000 faces.");
+    throw new RequestValidationError("T2 target_polycount must be between 100 and 15,000 faces.");
   }
   if (smartTopology && endpoint === "text" && options.topology === "quad") {
-    throw new Error("T2 text preview accepts triangle topology only.");
+    throw new RequestValidationError("T2 text preview accepts triangle topology only.");
   }
-  if (modelType === ModelType.LOWPOLY && model === AIModel.MESHY_6_LITE) {
-    throw new Error("meshy-6-lite does not support model_type lowpoly. Use model_type smart-topology with ai_model meshy-t2 instead.");
+  if (modelType === ModelType.LOWPOLY && isLiteModel(model)) {
+    throw new RequestValidationError("meshy-6-lite does not support model_type lowpoly. Use model_type smart-topology with ai_model meshy-t2 instead.");
   }
   if (options.ultra_mode && options.geometry_resolution !== undefined && options.geometry_resolution !== "2k") {
-    throw new Error("ultra_mode true conflicts with geometry_resolution; use 2k or omit the deprecated flag.");
+    throw new RequestValidationError("ultra_mode true conflicts with geometry_resolution; use 2k or omit the deprecated flag.");
   }
 
   // Preserve the pre-7.1 single-image Ultra request for legacy callers.
@@ -50,13 +53,13 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
     ? undefined : requestedResolution;
   if ((geometryResolution !== undefined && geometryResolution !== "standard") || legacyUltra) {
     if (modelType !== ModelType.STANDARD) {
-      throw new Error("Geometry resolution and Ultra require standard generation, not Smart Topology or lowpoly.");
+      throw new RequestValidationError("Geometry resolution and Ultra require standard generation, not Smart Topology or lowpoly.");
     }
     if (!legacyUltra && !isMeshy71(model)) {
-      throw new Error("geometry_resolution requires ai_model meshy-7.1 or latest.");
+      throw new RequestValidationError("geometry_resolution requires ai_model meshy-7.1 or latest.");
     }
     if (endpoint === "multi-image" && geometryResolution === "4k") {
-      throw new Error("Multi-image geometry_resolution supports standard or 2k only.");
+      throw new RequestValidationError("Multi-image geometry_resolution supports standard or 2k only.");
     }
   }
 
@@ -71,8 +74,8 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
 
 const isMeshy71 = (model?: string) => model === AIModel.MESHY_7_1 || model === AIModel.LATEST;
 
-/** meshy-6-lite takes 2K textures only. */
-export const isLiteModel = (model?: string) => model === AIModel.MESHY_6_LITE;
+/** meshy-6-lite (and deprecated meshy-5, served as meshy-6-lite): 2K textures only. */
+export const isLiteModel = (model?: string) => model === AIModel.MESHY_5 || model === AIModel.MESHY_6_LITE;
 
 /** image_enhancement is honored on meshy-6, meshy-7.1 and latest. */
 export const supportsImageEnhancement = (model?: string) => model === AIModel.MESHY_6 || isMeshy71(model);
@@ -80,7 +83,7 @@ export const supportsImageEnhancement = (model?: string) => model === AIModel.ME
 /** Rejects 4K/8K textures on the lite model instead of letting the API 400. */
 export function checkTextureResolution(model: string | undefined, textureResolution?: string, hdTexture?: boolean) {
   if (isLiteModel(model) && ((textureResolution !== undefined && textureResolution !== "2k") || hdTexture)) {
-    throw new Error(`${model} supports 2k textures only. Use meshy-6, meshy-7.1 or latest for 4k/8k.`);
+    throw new RequestValidationError(`${model} supports 2k textures only. Use meshy-6, meshy-7.1 or latest for 4k/8k.`);
   }
 }
 
@@ -93,12 +96,12 @@ export function checkMultiViewTexture(model: string, params: {
 }) {
   if (!params.texture_image_urls?.length) return;
   if (!isMeshy71(model)) {
-    throw new Error(`texture_image_urls requires ai_model meshy-7.1 or latest, but "${model}" was given.`);
+    throw new RequestValidationError(`texture_image_urls requires ai_model meshy-7.1 or latest, but "${model}" was given.`);
   }
   if (params.texture_image_url || params.texture_prompt) {
-    throw new Error("texture_image_urls cannot be combined with texture_image_url or texture_prompt.");
+    throw new RequestValidationError("texture_image_urls cannot be combined with texture_image_url or texture_prompt.");
   }
   if (params.should_texture === false) {
-    throw new Error("texture_image_urls requires should_texture true.");
+    throw new RequestValidationError("texture_image_urls requires should_texture true.");
   }
 }

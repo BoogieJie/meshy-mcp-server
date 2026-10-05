@@ -155,7 +155,7 @@ Args:
   - multiview_image_urls (string[]): 1-4 ordered views of the SAME object; element 0 is the primary
     reference and alone drives metallic/roughness prediction. Runs on Meshy 7 ("latest" is sent as "meshy-7").
   - ai_model (enum): "latest" (default, = Meshy 7), "meshy-7", "meshy-6", or "meshy-6-lite" (2K textures only). No meshy-7.1 here. Ask user which model before proceeding
-  - enable_original_uv (boolean, optional): Keep existing UVs instead of a fresh unwrap (API default: false)
+  - enable_original_uv (boolean, optional): Keep existing UVs instead of a fresh unwrap. Default: true with input_task_id, API default (false) with model_url
   - enable_pbr (boolean): Enable PBR textures (default: false)
   - texture_resolution (enum, optional): "2k" (default), "4k", or "8k". 8K costs 15 credits instead of 10 — confirm with the user. Replaces the deprecated hd_texture flag.
   - remove_lighting (boolean, optional): Remove highlights/shadows from base color texture. Only honored on meshy-6
@@ -252,7 +252,10 @@ Error Handling:
         const request: RetextureApiRequest = {
           enable_pbr: params.enable_pbr
         };
-        if (params.enable_original_uv !== undefined) request.enable_original_uv = params.enable_original_uv;
+        // Meshy-generated models (input_task_id) keep their UV layout by default, as
+        // the docs recommend; uploads (model_url) take the API default (fresh unwrap).
+        const keepUV = params.enable_original_uv ?? (params.input_task_id ? true : undefined);
+        if (keepUV !== undefined) request.enable_original_uv = keepUV;
 
         if (params.input_task_id) request.input_task_id = params.input_task_id;
         if (params.model_url) request.model_url = params.model_url;

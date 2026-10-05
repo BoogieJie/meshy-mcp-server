@@ -375,3 +375,52 @@ for (const [label, tool, input] of [
     await invalid(tool, input);
   });
 }
+
+test("local validation errors carry no unrelated recovery hint", async () => {
+  const { tools } = (() => {
+    const tools = new Map();
+    registerGenerationTools(
+      { registerTool(name, config, handler) { tools.set(name, { schema: config.inputSchema, handler }); } },
+      { async post() { throw new Error("must not post"); } },
+    );
+    return { tools };
+  })();
+  const { schema, handler } = tools.get("meshy_multi_image_to_3d");
+  const result = await handler(schema.parse({
+    image_urls: ["https://example.invalid/a.png"],
+    ai_model: "meshy-6",
+    texture_image_urls: ["https://example.invalid/t.png"],
+  }));
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /texture_image_urls requires/);
+  assert.doesNotMatch(result.content[0].text, /file_path/);
+});
+
+test("deprecated meshy-5 is still accepted and treated as the lite model", async () => {
+  const { call, invalid } = (() => {
+    const tools = new Map();
+    const requests = [];
+    registerGenerationTools(
+      { registerTool(name, config, handler) { tools.set(name, { schema: config.inputSchema, handler }); } },
+      { async post(path, body) { requests.push({ path, body }); return { result: "offline-task-id" }; } },
+    );
+    return {
+      async call(name, input) {
+        const { schema, handler } = tools.get(name);
+        const result = await handler(schema.parse(input));
+        assert.notEqual(result.isError, true, JSON.stringify(result));
+        return requests.at(-1);
+      },
+      async invalid(name, input) {
+        const { schema, handler } = tools.get(name);
+        const before = requests.length;
+        const result = await handler(schema.parse(input));
+        assert.equal(result.isError, true);
+        assert.equal(requests.length, before);
+      },
+    };
+  })();
+  const { body } = await call("meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-5" });
+  assert.equal(body.ai_model, "meshy-5");
+  await invalid("meshy_image_to_3d", { input_task_id: "x", ai_model: "meshy-5", texture_resolution: "8k" });
+});

@@ -4,6 +4,7 @@
 
 import { AxiosError } from "axios";
 import { ErrorCode } from "../constants.js";
+import { RequestValidationError } from "../utils/generation-options.js";
 
 export interface MeshyError {
   code: string;
@@ -116,6 +117,9 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
   }
 
   // Handle generic errors
+  if (error instanceof RequestValidationError) {
+    return `Error: ${error.message}`;
+  }
   let baseMessage: string;
   if (error instanceof Error) {
     baseMessage = `Error: ${error.message}`;
