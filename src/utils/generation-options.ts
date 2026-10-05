@@ -34,6 +34,9 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   if (smartTopology && endpoint === "text" && options.topology === "quad") {
     throw new Error("T2 text preview accepts triangle topology only.");
   }
+  if (modelType === ModelType.LOWPOLY && model === AIModel.MESHY_6_LITE) {
+    throw new Error("meshy-6-lite does not support model_type lowpoly. Use model_type smart-topology with ai_model meshy-t2 instead.");
+  }
   if (options.ultra_mode && options.geometry_resolution !== undefined && options.geometry_resolution !== "2k") {
     throw new Error("ultra_mode true conflicts with geometry_resolution; use 2k or omit the deprecated flag.");
   }
@@ -41,12 +44,15 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   // Preserve the pre-7.1 single-image Ultra request for legacy callers.
   const legacyUltra = options.ultra_mode && model === AIModel.MESHY_7 &&
     endpoint === "image" && options.geometry_resolution === undefined;
-  const geometryResolution = options.geometry_resolution ?? (options.ultra_mode && !legacyUltra ? "2k" : undefined);
-  if (geometryResolution !== undefined || legacyUltra) {
+  const requestedResolution = options.geometry_resolution ?? (options.ultra_mode && !legacyUltra ? "2k" : undefined);
+  // "standard" is the API default, so it only needs forwarding on models that take the field.
+  const geometryResolution = requestedResolution === "standard" && !isMeshy71(model)
+    ? undefined : requestedResolution;
+  if ((geometryResolution !== undefined && geometryResolution !== "standard") || legacyUltra) {
     if (modelType !== ModelType.STANDARD) {
       throw new Error("Geometry resolution and Ultra require standard generation, not Smart Topology or lowpoly.");
     }
-    if (!legacyUltra && model !== AIModel.MESHY_7_1 && model !== AIModel.LATEST) {
+    if (!legacyUltra && !isMeshy71(model)) {
       throw new Error("geometry_resolution requires ai_model meshy-7.1 or latest.");
     }
     if (endpoint === "multi-image" && geometryResolution === "4k") {
@@ -61,4 +67,38 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
     geometry_resolution: geometryResolution,
     ultra_mode: legacyUltra ? true : undefined
   };
+}
+
+const isMeshy71 = (model?: string) => model === AIModel.MESHY_7_1 || model === AIModel.LATEST;
+
+/** meshy-6-lite (and legacy meshy-5, which the API serves as meshy-6-lite): 2K textures only. */
+export const isLiteModel = (model?: string) => model === AIModel.MESHY_5 || model === AIModel.MESHY_6_LITE;
+
+/** image_enhancement is honored on meshy-6, meshy-7.1 and latest. */
+export const supportsImageEnhancement = (model?: string) => model === AIModel.MESHY_6 || isMeshy71(model);
+
+/** Rejects 4K/8K textures on the lite model instead of letting the API 400. */
+export function checkTextureResolution(model: string | undefined, textureResolution?: string, hdTexture?: boolean) {
+  if (isLiteModel(model) && ((textureResolution !== undefined && textureResolution !== "2k") || hdTexture)) {
+    throw new Error(`${model} supports 2k textures only. Use meshy-6, meshy-7.1 or latest for 4k/8k.`);
+  }
+}
+
+/** Multi-view texture (texture_image_urls) on multi-image-to-3d. */
+export function checkMultiViewTexture(model: string, params: {
+  texture_image_urls?: string[];
+  texture_image_url?: string;
+  texture_prompt?: string;
+  should_texture?: boolean;
+}) {
+  if (!params.texture_image_urls?.length) return;
+  if (!isMeshy71(model)) {
+    throw new Error(`texture_image_urls requires ai_model meshy-7.1 or latest, but "${model}" was given.`);
+  }
+  if (params.texture_image_url || params.texture_prompt) {
+    throw new Error("texture_image_urls cannot be combined with texture_image_url or texture_prompt.");
+  }
+  if (params.should_texture === false) {
+    throw new Error("texture_image_urls requires should_texture true.");
+  }
 }

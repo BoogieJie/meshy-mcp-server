@@ -117,6 +117,7 @@ export interface MultiImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  texture_image_urls?: string[];
   texture_resolution?: string;
   hd_texture?: boolean;
   image_enhancement?: boolean;

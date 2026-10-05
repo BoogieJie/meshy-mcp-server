@@ -12,9 +12,9 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 
 | Tool | Credits |
 |------|---------|
-| meshy_text_to_3d | Model/geometry dependent; check current API pricing |
+| meshy_text_to_3d (preview, mesh only) | 20 (meshy-7.1 / latest / meshy-6), 5 (meshy-6-lite, meshy-t2) |
 | meshy_text_to_3d_refine | 10 (15 with texture_resolution "8k") |
-| meshy_image_to_3d / meshy_multi_image_to_3d | Model/geometry/texture dependent; check current API pricing |
+| meshy_image_to_3d / meshy_multi_image_to_3d | see the generation table below |
 | meshy_retexture | 10 (15 with texture_resolution "8k") |
 | meshy_remesh | 5 |
 | meshy_rig | 5 (includes walking + running) |
@@ -28,14 +28,27 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 | meshy_creative_lab | 36 (6 + 30) — EXCEPT keycap, which is 62 (12 + 50) |
 | meshy_text_to_image / meshy_image_to_image | nano-banana 3 / nano-banana-2 6 / nano-banana-pro 9 / gpt-image-2: text 9, image 12 |
 
+### 3D generation cost (image-to-3d / multi-image-to-3d)
+| ai_model | mesh only | + 2K/4K texture | + 8K texture |
+|---|---|---|---|
+| meshy-7.1 / latest | 20 | 30 | 35 |
+| meshy-6 | 20 | 30 | 35 |
+| meshy-6-lite | 5 | 15 | — (2K only) |
+| meshy-t2 (smart-topology, single-image only) | 5 | 15 | 20 |
+
+Ultra geometry (geometry_resolution "2k" or "4k", or the deprecated ultra_mode) adds **+5** on meshy-7.1 / latest. Multi-image takes "2k" but not "4k".
+Legacy ids: meshy-7 is deprecated and billed like meshy-7.1; meshy-5 is served as meshy-6-lite; model_type "lowpoly" is billed like meshy-6 and retires on 2026-10-30 (use smart-topology + meshy-t2).
+texture_resolution "8k" costs 5 more than 2K/4K — always confirm it explicitly.
+
 ### Current generation routing
-Standard text preview, single-image, and multi-image generation support ai_model "meshy-7.1" / "latest" (currently Meshy 7.1). Prefer an explicit model for reproducibility.
+Standard text preview, single-image, and multi-image generation take ai_model "latest" (default, = Meshy 7.1), "meshy-7.1", "meshy-6" or "meshy-6-lite". Prefer an explicit model for reproducibility.
 Smart Topology uses model_type "smart-topology" with ai_model "meshy-t2" on text preview and single-image generation, not multi-image. T2 directly targets 100–15,000 triangle faces (default 4,000), without remesh/decimation. Text T2 rejects quad topology.
 geometry_resolution "standard" / "2k" / "4k" controls geometry detail on standard 7.1/latest; multi-image supports standard/2k only. ultra_mode is deprecated in favor of the 2k pass. Confirm higher-detail cost first.
 Standard target_polycount requires should_remesh true and is superseded by decimation_mode. Do not automatically remesh Smart Topology output.
 Refine ai_model is optional: omit it to inherit the preview model. T2 is not an explicit refine override.
-image_enhancement applies to Meshy 6/7.1/latest; remove_lighting applies only to Meshy 6. Do not assume these options work on every model.
-Check https://docs.meshy.ai/en/api/pricing before quoting generation costs, including geometry and texture upgrades. Other tool credit examples above must also be rechecked before paid calls.
+image_enhancement applies to Meshy 6/7.1/latest. remove_lighting applies to Meshy 6 only, except on multi-image where 7.1/latest honor it too.
+Multi-image can drive the texture from 1–4 views of the same object (texture_image_urls, meshy-7.1/latest only).
+Prices above match https://docs.meshy.ai/en/api/pricing as of 2026-10-05; point the user there if a number looks off.
 
 ## Rule 2: Determine Output Format BEFORE Generating
 The API parameter target_formats controls which formats are produced. Decide the output format before calling any generation tool, because target_formats must be set at creation time. Ask user about their intended use first.

@@ -11,7 +11,12 @@ import { TextTo3DInputSchema, ImageTo3DInputSchema, TextTo3DRefineInputSchema, M
 import { TaskCreatedOutputSchema } from "../schemas/output.js";
 import { ResponseFormat } from "../constants.js";
 import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
-import { resolveGenerationOptions } from "../utils/generation-options.js";
+import {
+  checkMultiViewTexture,
+  checkTextureResolution,
+  resolveGenerationOptions,
+  supportsImageEnhancement
+} from "../utils/generation-options.js";
 import {
   CreateTaskApiResponse,
   TextTo3DApiRequest,
@@ -36,10 +41,10 @@ PREFER THE IMAGE ROUTE: for higher quality and more control, generate a design i
 This tool creates a new 3D generation task and returns a task_id that can be used to poll the status. The generation process is asynchronous and typically takes 2-3 minutes.
 
 Args:
-  - prompt (string): Text description of the 3D model (2-600 characters)
-  - ai_model: "meshy-7.1" or "latest" (currently Meshy 7.1) for standard; "meshy-t2" for Smart Topology. Legacy standard IDs remain accepted. Confirm model choice and current cost first
+  - prompt (string): Text description of the 3D model (2-800 characters)
+  - ai_model: "latest" (default, = Meshy 7.1) / "meshy-7.1" / "meshy-6" (20 credits), "meshy-6-lite" (5 credits) for standard; "meshy-t2" (5 credits) for Smart Topology. "meshy-7" is deprecated. Ask the user which model and confirm the cost first
   - model_type: "standard" (default), "smart-topology" (T2, triangle-only), or deprecated "lowpoly"
-  - geometry_resolution: "standard", "2k", or "4k" for Meshy 7.1/latest standard generation. Confirm higher-detail cost
+  - geometry_resolution: "standard" (default), "2k" or "4k" Ultra pass (+5 credits) on Meshy 7.1/latest standard generation. Confirm the surcharge first
   - ultra_mode: deprecated compatibility alias for geometry_resolution "2k"
   - topology (enum, optional): Mesh topology - "quad" or "triangle"
   - target_polycount (number, optional): Target polygon count (100–300,000)
@@ -64,7 +69,8 @@ Next Steps:
   Use meshy_get_task_status with the task_id to wait for completion.
 
 Examples:
-  - "Create a low-poly dragon" → { prompt: "dragon", model_type: "smart-topology", ai_model: "meshy-t2" }
+  - "Create a low-poly dragon" → { prompt: "dragon", model_type: "smart-topology", ai_model: "meshy-t2", target_polycount: 4000 }
+  - "Max detail" → { prompt: "ornate knight helmet", ai_model: "meshy-7.1", geometry_resolution: "4k" }
   - "Generate for 3D print" → { prompt: "cat", target_formats: ["obj"] }
   - "Character for animation" → { prompt: "warrior", pose_mode: "t-pose" }`,
       inputSchema: TextTo3DInputSchema,
@@ -162,15 +168,15 @@ IMAGE INPUT (provide ONE, NEVER both):
   - NEVER manually base64-encode. NEVER use both file_path and image_url.
 
 Other Args:
-  - ai_model: "meshy-7.1" or "latest" (currently Meshy 7.1) for standard; "meshy-t2" for Smart Topology. Legacy standard IDs and single-image "meshy-t1" remain accepted. Confirm model choice and current cost first
-  - geometry_resolution: "standard", "2k", or "4k" for Meshy 7.1/latest standard generation. Confirm higher-detail cost
+  - ai_model: "latest" (default, = Meshy 7.1) / "meshy-7.1" / "meshy-6" (20 mesh, 30 textured), "meshy-6-lite" (5 / 15, 2K textures only) for standard; "meshy-t2" (5 / 15) for Smart Topology. "meshy-7" is deprecated; legacy "meshy-t1" still accepted. Ask the user which model and confirm the cost first
+  - geometry_resolution: "standard" (default), "2k" or "4k" Ultra pass (+5 credits) on Meshy 7.1/latest standard generation. Confirm the surcharge first
   - ultra_mode: deprecated compatibility alias for the 2k pass. Legacy explicit Meshy 7 single-image Ultra is retained
   - model_type: "standard" (default), "smart-topology", or "lowpoly" (deprecated)
   - pose_mode, topology, target_polycount, should_remesh, symmetry_mode
   - should_texture: Whether to generate textures (default true). Set false for untextured mesh
   - enable_pbr: PBR maps (default false). Set true for metallic/roughness/normal maps
   - texture_prompt, texture_image_url: Guide texturing
-  - texture_resolution: "2k" (default) / "4k" / "8k". 8K costs 15 credits instead of 10 — confirm first.
+  - texture_resolution: "2k" (default) / "4k" / "8k". 8K adds 5 credits — confirm first. Not on meshy-6-lite.
     Replaces the deprecated hd_texture flag
   - image_enhancement: Supported on meshy-6, meshy-7.1, and latest; false preserves deliberate input styling
   - remove_lighting: Meshy 6 only; omitted values are not inserted into requests
@@ -241,20 +247,14 @@ Error Handling:
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        const isHDCapableImage = options.ai_model !== "meshy-5";
-        const supportsEnhancement =
-          options.ai_model === "meshy-6" ||
-          options.ai_model === "meshy-7.1" ||
-          options.ai_model === "latest";
-        if (isHDCapableImage) {
-          if (params.texture_resolution !== undefined) {
-            request.texture_resolution = params.texture_resolution;
-          }
-          if (params.hd_texture !== undefined) {
-            request.hd_texture = params.hd_texture;
-          }
+        checkTextureResolution(options.ai_model, params.texture_resolution, params.hd_texture);
+        if (params.texture_resolution !== undefined) {
+          request.texture_resolution = params.texture_resolution;
         }
-        if (supportsEnhancement && params.image_enhancement !== undefined) {
+        if (params.hd_texture !== undefined) {
+          request.hd_texture = params.hd_texture;
+        }
+        if (supportsImageEnhancement(options.ai_model) && params.image_enhancement !== undefined) {
           request.image_enhancement = params.image_enhancement;
         }
         if (
@@ -328,9 +328,10 @@ This tool takes a completed preview task and generates a fully textured model. R
 Args:
   - preview_task_id (string): Task ID of the completed preview task to refine (required)
   - enable_pbr (boolean): Enable physically-based rendering textures (default: false)
-  - texture_prompt (string, optional): Text to guide texturing. Max 600 characters
+  - texture_prompt (string, optional): Text to guide texturing. Max 800 characters
   - texture_image_url (string, optional): Image URL to guide texturing
-  - ai_model: Optional standard-model override including "meshy-7.1"/"latest". Omit to inherit the preview model. T2 is not a refine override
+  - texture_resolution: "2k" (default) / "4k" / "8k". 10 credits, 15 at 8K. Not on meshy-6-lite
+  - ai_model: Optional override: "meshy-7.1", "latest" (= Meshy 7.1), "meshy-6", "meshy-6-lite". Omit to inherit the preview model. T2 is not a refine override
   - remove_lighting: Meshy 6 only; an explicit value with an inherited model is passed for the API to apply where supported
   - target_formats (string[], optional): Output formats. Default: all except 3mf.
   - auto_size (boolean, optional): AI auto-estimate real-world height. Default false.
@@ -374,13 +375,12 @@ Examples:
           request.texture_image_url = params.texture_image_url;
         }
         // Without an override, the API inherits the preview model.
-        if (params.ai_model !== "meshy-5") {
-          if (params.texture_resolution !== undefined) {
-            request.texture_resolution = params.texture_resolution;
-          }
-          if (params.hd_texture !== undefined) {
-            request.hd_texture = params.hd_texture;
-          }
+        checkTextureResolution(params.ai_model, params.texture_resolution, params.hd_texture);
+        if (params.texture_resolution !== undefined) {
+          request.texture_resolution = params.texture_resolution;
+        }
+        if (params.hd_texture !== undefined) {
+          request.hd_texture = params.hd_texture;
         }
         if (
           (params.ai_model === undefined || params.ai_model === "meshy-6") &&
@@ -441,22 +441,25 @@ Image Input (provide ONE of these):
 IMPORTANT: For local files, always use file_paths instead of manually base64-encoding.
 
 Other Args:
-  - ai_model: "meshy-7.1" or "latest" (currently Meshy 7.1); legacy standard IDs remain accepted. Smart Topology is unavailable here. Confirm model choice and current cost first
-  - geometry_resolution: "standard" or "2k" only, on Meshy 7.1/latest standard generation
+  - ai_model: "latest" (default, = Meshy 7.1) / "meshy-7.1" / "meshy-6" (20 mesh, 30 textured), "meshy-6-lite" (5 / 15, 2K textures only). "meshy-7" is deprecated. Smart Topology is unavailable here. Ask the user which model and confirm the cost first
+  - geometry_resolution: "standard" (default) or "2k" Ultra pass (+5 credits) on Meshy 7.1/latest. No 4k here
   - ultra_mode: deprecated compatibility alias for the 2k pass; confirm higher-detail cost
   - model_type: "standard" or "lowpoly", pose_mode, topology, target_polycount, should_remesh, symmetry_mode
   - should_texture: Whether to generate textures (default true)
   - enable_pbr: PBR maps (default false)
   - texture_prompt, texture_image_url: Guide texturing
-  - texture_resolution: "2k" (default) / "4k" / "8k". 8K costs 15 credits instead of 10 — confirm first.
+  - texture_image_urls: 1–4 views of the same object to drive the texture (front view first). Meshy 7.1/latest only;
+    not combinable with texture_prompt / texture_image_url
+  - texture_resolution: "2k" (default) / "4k" / "8k". 8K adds 5 credits — confirm first. Not on meshy-6-lite.
     Replaces the deprecated hd_texture flag
   - image_enhancement: Supported on meshy-6, meshy-7.1, and latest; false preserves input styling
-  - remove_lighting: Meshy 6 only; omitted values are not inserted into requests
+  - remove_lighting: Supported on meshy-6, meshy-7.1, and latest
   - save_pre_remeshed_model, response_format
 
 Examples:
   - Local files: { file_paths: ["/path/front.jpg", "/path/side.jpg"] }
   - Public URLs: { image_urls: ["https://example.com/front.jpg", "https://example.com/side.jpg"] }
+  - Multi-view texture: { image_urls: ["https://example.com/front.jpg"], texture_image_urls: ["https://example.com/front-color.jpg", "https://example.com/back-color.jpg"] }
 
 Error Handling:
   - Returns "InvalidImageUrl" if any image is not accessible
@@ -473,6 +476,8 @@ Error Handling:
     async (params: z.infer<typeof MultiImageTo3DInputSchema>) => {
       try {
         const options = resolveGenerationOptions(params, "multi-image");
+        checkMultiViewTexture(options.ai_model, params);
+        checkTextureResolution(options.ai_model, params.texture_resolution, params.hd_texture);
         const request: MultiImageTo3DApiRequest = {
           enable_pbr: params.enable_pbr,
           moderation: false,
@@ -516,24 +521,19 @@ Error Handling:
           request.texture_prompt = params.texture_prompt;
         if (params.texture_image_url)
           request.texture_image_url = params.texture_image_url;
-        const isHDCapableMulti = options.ai_model !== "meshy-5";
-        const supportsEnhancement =
-          options.ai_model === "meshy-6" ||
-          options.ai_model === "meshy-7.1" ||
-          options.ai_model === "latest";
-        if (isHDCapableMulti) {
-          if (params.texture_resolution !== undefined)
-            request.texture_resolution = params.texture_resolution;
-          if (params.hd_texture !== undefined)
-            request.hd_texture = params.hd_texture;
+        if (params.texture_image_urls?.length)
+          request.texture_image_urls = params.texture_image_urls;
+        if (params.texture_resolution !== undefined)
+          request.texture_resolution = params.texture_resolution;
+        if (params.hd_texture !== undefined)
+          request.hd_texture = params.hd_texture;
+        // Multi-image honors both flags on meshy-6, meshy-7.1 and latest.
+        if (supportsImageEnhancement(options.ai_model)) {
+          if (params.image_enhancement !== undefined)
+            request.image_enhancement = params.image_enhancement;
+          if (params.remove_lighting !== undefined)
+            request.remove_lighting = params.remove_lighting;
         }
-        if (supportsEnhancement && params.image_enhancement !== undefined)
-          request.image_enhancement = params.image_enhancement;
-        if (
-          options.ai_model === "meshy-6" &&
-          params.remove_lighting !== undefined
-        )
-          request.remove_lighting = params.remove_lighting;
         if (params.save_pre_remeshed_model !== undefined)
           request.save_pre_remeshed_model = params.save_pre_remeshed_model;
         if (params.decimation_mode !== undefined)

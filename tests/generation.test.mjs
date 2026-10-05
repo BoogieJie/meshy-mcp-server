@@ -225,9 +225,11 @@ for (const [tool, source] of [
       assert.equal(body.image_enhancement, false);
       assert.equal(body.should_texture, false);
       assert.equal(body.enable_pbr, false);
-      assert.equal("remove_lighting" in body, ai_model === "meshy-6");
-      if (ai_model === "meshy-6") assert.equal(body.remove_lighting, false);
-      else assert.equal(body.geometry_resolution, "2k");
+      // Single-image honors remove_lighting on meshy-6 only; multi-image also on 7.1/latest.
+      const keepsLighting = ai_model === "meshy-6" || tool === "meshy_multi_image_to_3d";
+      assert.equal("remove_lighting" in body, keepsLighting);
+      if (keepsLighting) assert.equal(body.remove_lighting, false);
+      if (ai_model !== "meshy-6") assert.equal(body.geometry_resolution, "2k");
     });
   }
   test(`${tool}: omitted lighting removal is not defaulted`, async () => {
@@ -307,3 +309,69 @@ test("refine inherits the preview model and preserves explicit overrides", async
     if ("remove_lighting" in body) assert.equal(body.remove_lighting, false);
   }
 });
+
+test("meshy-6-lite is accepted on every generation endpoint", async () => {
+  const { call } = createHarness();
+  const { body: text } = await call("meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-6-lite" });
+  assert.equal(text.ai_model, "meshy-6-lite");
+  assert.equal(text.model_type, "standard");
+  const { body: image } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image",
+    ai_model: "meshy-6-lite",
+    texture_resolution: "2k",
+    image_enhancement: false,
+  });
+  assert.equal(image.texture_resolution, "2k");
+  assert.equal("image_enhancement" in image, false);
+  const { body: multi } = await call("meshy_multi_image_to_3d", {
+    image_urls: ["https://example.invalid/input.png"],
+    ai_model: "meshy-6-lite",
+  });
+  assert.equal(multi.ai_model, "meshy-6-lite");
+  const { body: refine } = await call("meshy_text_to_3d_refine", {
+    preview_task_id: "offline-preview",
+    ai_model: "meshy-6-lite",
+  });
+  assert.equal(refine.ai_model, "meshy-6-lite");
+});
+
+test("standard geometry_resolution is dropped for models that do not take it", async () => {
+  const { call } = createHarness();
+  const { body } = await call("meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-6", geometry_resolution: "standard" });
+  assert.equal("geometry_resolution" in body, false);
+  const { body: latest } = await call("meshy_text_to_3d", { prompt: "a robot", geometry_resolution: "4k" });
+  assert.equal(latest.geometry_resolution, "4k");
+  assert.equal(latest.ai_model, "latest");
+});
+
+test("text prompts up to 800 characters are accepted", async () => {
+  const { call } = createHarness();
+  const { body } = await call("meshy_text_to_3d", { prompt: "a".repeat(800) });
+  assert.equal(body.prompt.length, 800);
+});
+
+test("multi-image forwards multi-view texture images on meshy-7.1", async () => {
+  const { call } = createHarness();
+  const texture_image_urls = ["https://example.invalid/front.png", "https://example.invalid/back.png"];
+  const { body } = await call("meshy_multi_image_to_3d", {
+    image_urls: ["https://example.invalid/input.png"],
+    texture_image_urls,
+  });
+  assert.deepEqual(body.texture_image_urls, texture_image_urls);
+  assert.equal(body.ai_model, "latest");
+});
+
+for (const [label, tool, input] of [
+  ["4k texture on meshy-6-lite", "meshy_image_to_3d", { input_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "4k" }],
+  ["hd_texture on meshy-5", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-5", hd_texture: true }],
+  ["8k refine on meshy-6-lite", "meshy_text_to_3d_refine", { preview_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "8k" }],
+  ["lowpoly on meshy-6-lite", "meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-6-lite", model_type: "lowpoly" }],
+  ["multi-view texture on meshy-6", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-6", texture_image_urls: ["https://example.invalid/t.png"] }],
+  ["multi-view texture with texture_prompt", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], texture_image_urls: ["https://example.invalid/t.png"], texture_prompt: "gold" }],
+  ["multi-view texture without texturing", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], texture_image_urls: ["https://example.invalid/t.png"], should_texture: false }],
+]) {
+  test(`rejects ${label} before posting`, async () => {
+    const { invalid } = createHarness();
+    await invalid(tool, input);
+  });
+}

@@ -36,36 +36,45 @@ const hdTexture = () =>
     .describe("DEPRECATED — use texture_resolution instead (hd_texture: true is exactly texture_resolution: '4k'). Kept for backward compatibility.");
 const textureResolution = () =>
   z.nativeEnum(TextureResolution).optional()
-    .describe("Base color texture resolution: 2k (default), 4k, or 8k. Supported on meshy-6 / meshy-7 / meshy-7.1 / latest / smart-topology. PBR maps stay at 2K. Replaces hd_texture; confirm current texturing cost before submitting.");
+    .describe("Base color texture resolution: 2k (default), 4k, or 8k. 4k/8k need meshy-6 / meshy-7.1 / latest / meshy-t2 (meshy-6-lite is 2k only). 8k adds 5 credits to the texture stage (15 instead of 10). PBR maps stay at 2K. Replaces hd_texture.");
 const multiViewThumbnails = () =>
   z.boolean().optional()
     .describe("Also return 4 cardinal-view thumbnails (front/back/left/right). Default false.");
 const geometryResolution = () =>
   z.enum(["standard", "2k", "4k"]).optional()
-    .describe("Meshy 7.1 geometry pass: standard, 2k, or 4k. Requires meshy-7.1/latest and standard model type. Confirm additional cost before higher-detail passes.");
+    .describe("Meshy 7.1 geometry pass: standard (default), 2k (Ultra, 2048³) or 4k (Ultra, 4096³, finest detail). 2k/4k need meshy-7.1/latest with model_type standard and add 5 credits. Confirm the surcharge with the user first.");
 const deprecatedUltraMode = () =>
   z.boolean().optional()
     .describe("DEPRECATED — prefer geometry_resolution. true is equivalent to the 2k geometry pass; cannot conflict with geometry_resolution or be used with Smart Topology/lowpoly.");
 const lightingRemoval = () =>
   z.boolean().optional()
-    .describe("Lighting removal for Meshy 6 only. Omitted values are left to the API default; not automatically sent with latest or Meshy 7.1.");
+    .describe("Remove highlights/shadows from the base color texture. Only honored on meshy-6 (API default true there); not sent for other models.");
+const generationTexturePrompt = () =>
+  z.string()
+    .max(800, "Texture prompt must not exceed 800 characters")
+    .optional()
+    .describe("Text to guide texturing. Max 800 characters");
 const deprecatedSymmetryMode = () =>
   z.nativeEnum(SymmetryMode).optional()
     .describe("DEPRECATED — no longer affects output (kept for backward compatibility). Values: 'off', 'auto', 'on'.");
 import {
   ResponseFormatSchema,
-  PromptSchema,
   UrlSchema
 } from "./common.js";
+
+const GenerationPromptSchema = z.string()
+  .min(2, "Prompt must be at least 2 characters")
+  .max(800, "Prompt must not exceed 800 characters")
+  .describe("Text description of the 3D model (max 800 characters)");
 
 /**
  * Text-to-3D input schema
  */
 export const TextTo3DInputSchema = z.object({
-  prompt: PromptSchema,
+  prompt: GenerationPromptSchema,
   ai_model: z.union([z.nativeEnum(AIModel), z.literal(SmartTopologyModel.MESHY_T2)])
     .optional()
-    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy standard IDs remain accepted. Smart Topology: meshy-t2 with model_type smart-topology. Omitted model defaults to latest for standard or T2 for Smart Topology. Confirm model choice and current cost before generation."),
+    .describe("Standard (model_type standard): 'latest' (default, = Meshy 7.1) or 'meshy-7.1' = best quality, 20 credits; 'meshy-6' = 20 credits; 'meshy-6-lite' = fast and cheap, 5 credits. 'meshy-7' is deprecated (use meshy-7.1). Smart Topology (model_type smart-topology): 'meshy-t2' = clean part-separated triangle mesh at a set face count, 5 credits. Omitted ai_model defaults to latest, or to meshy-t2 under smart-topology. IMPORTANT: ask the user which model to use and confirm the cost first."),
   model_type: z.nativeEnum(ModelType)
     .optional()
     .describe("standard (default), smart-topology (T2, triangle-only), or deprecated lowpoly. Smart Topology ignores remesh and adaptive-decimation controls."),
@@ -114,7 +123,7 @@ export const ImageTo3DInputSchema = z.object({
     .describe("Chain from a SUCCEEDED text-to-image or image-to-image task: use its generated image as the input instead of image_url/file_path. Provide only one image source."),
   ai_model: z.union([z.nativeEnum(AIModel), z.nativeEnum(SmartTopologyModel)])
     .optional()
-    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy IDs remain accepted. Smart Topology: meshy-t2 (default) or legacy meshy-t1 with model_type smart-topology. Confirm model choice and current cost before generation."),
+    .describe("Standard (model_type standard): 'latest' (default, = Meshy 7.1) or 'meshy-7.1' = best quality; 'meshy-6'; 'meshy-6-lite' = fast and cheap, 2K textures only. 'meshy-7' is deprecated (use meshy-7.1). Smart Topology (model_type smart-topology): 'meshy-t2' (default) = clean part-separated mesh at a set face count; legacy 'meshy-t1' still accepted. Credits: meshy-7.1/latest/meshy-6 20 mesh-only, 30 textured (35 at 8K); meshy-6-lite 5 / 15; meshy-t2 5 / 15 (20 at 8K). IMPORTANT: ask the user which model to use and confirm the cost first."),
   geometry_resolution: geometryResolution(),
   ultra_mode: deprecatedUltraMode(),
   model_type: z.nativeEnum(ModelType)
@@ -143,10 +152,7 @@ export const ImageTo3DInputSchema = z.object({
   should_texture: z.boolean()
     .optional()
     .describe("Whether to generate textures. Default true"),
-  texture_prompt: z.string()
-    .max(600)
-    .optional()
-    .describe("Text to guide texturing. Max 600 characters"),
+  texture_prompt: generationTexturePrompt(),
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
@@ -181,16 +187,13 @@ export const TextTo3DRefineInputSchema = z.object({
   enable_pbr: z.boolean()
     .default(false)
     .describe("Enable physically-based rendering textures"),
-  texture_prompt: z.string()
-    .max(600, "Texture prompt must not exceed 600 characters")
-    .optional()
-    .describe("Text to guide texturing. Max 600 characters"),
+  texture_prompt: generationTexturePrompt(),
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
   ai_model: z.nativeEnum(AIModel)
     .optional()
-    .describe("Refine model override: meshy-7.1/latest or a legacy standard model. Omit to inherit the preview model. Do not pass T2 as a refine override; confirm texturing cost before submitting."),
+    .describe("Texture model override: 'meshy-7.1', 'latest' (= Meshy 7.1), 'meshy-6' or 'meshy-6-lite' (2K only). 'meshy-7' is deprecated. Omit (recommended) to inherit the preview's model. Do not pass meshy-t2 here. Texturing costs 10 credits (15 at 8K)."),
   texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   remove_lighting: lightingRemoval(),
@@ -224,9 +227,9 @@ export const MultiImageTo3DInputSchema = z.object({
     .describe("Chain from a SUCCEEDED text-to-image / image-to-image task that produced multi-view images, using them as the input instead of image_urls/file_paths."),
   ai_model: z.nativeEnum(AIModel)
     .default(AIModel.LATEST)
-    .describe("Standard generation: meshy-7.1 or latest (currently Meshy 7.1); legacy IDs remain accepted. Smart Topology is not supported here. Confirm model choice and current cost first."),
+    .describe("'latest' (default, = Meshy 7.1) or 'meshy-7.1' = best quality; 'meshy-6'; 'meshy-6-lite' = fast and cheap, 2K textures only. 'meshy-7' is deprecated (use meshy-7.1). Smart Topology is not available here. Credits: meshy-7.1/latest/meshy-6 20 mesh-only, 30 textured (35 at 8K); meshy-6-lite 5 / 15. IMPORTANT: ask the user which model to use and confirm the cost first."),
   geometry_resolution: z.enum(["standard", "2k"]).optional()
-    .describe("Meshy 7.1 multi-image geometry pass: standard or 2k only. Confirm extra cost before using 2k."),
+    .describe("Meshy 7.1 geometry pass: standard (default) or 2k (Ultra, +5 credits). 4k is not available on multi-image. Needs meshy-7.1/latest. Confirm the surcharge first."),
   ultra_mode: deprecatedUltraMode(),
   model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
     .optional()
@@ -254,19 +257,23 @@ export const MultiImageTo3DInputSchema = z.object({
   should_texture: z.boolean()
     .optional()
     .describe("Whether to generate textures. Default true"),
-  texture_prompt: z.string()
-    .max(600)
-    .optional()
-    .describe("Text to guide texturing. Max 600 characters"),
+  texture_prompt: generationTexturePrompt(),
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
+  texture_image_urls: z.array(z.string())
+    .min(1)
+    .max(4)
+    .optional()
+    .describe("Multi-view texture: 1–4 public URLs or data URIs of the SAME object from different views; element 0 is the front view. Guides texture only and is independent of image_urls. Requires meshy-7.1/latest; cannot be combined with texture_image_url or texture_prompt."),
   texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
     .describe("Optimize input images. Supported on meshy-6, meshy-7.1, and latest. Set false to preserve source styling."),
-  remove_lighting: lightingRemoval(),
+  remove_lighting: z.boolean()
+    .optional()
+    .describe("Remove highlights/shadows from the base color texture. Honored on meshy-6, meshy-7.1 and latest (API default true); not sent for other models."),
   save_pre_remeshed_model: z.boolean()
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),

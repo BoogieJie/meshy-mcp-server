@@ -46,10 +46,14 @@ export enum ModelFormat {
 
 // AI Models
 //
-// Generation endpoints support Meshy 7.1; legacy model IDs remain accepted here
-// for existing callers. Keep endpoint-specific restrictions in each schema.
+// Generation endpoints (text / image / multi-image) take meshy-6-lite, meshy-6,
+// meshy-7.1 and latest (= Meshy 7.1). Retexture takes meshy-6-lite, meshy-6,
+// meshy-7 and latest (= Meshy 7) — no meshy-7.1 there. meshy-7 is deprecated on
+// generation (use meshy-7.1); meshy-5 is legacy and the API serves it as
+// meshy-6-lite. Keep endpoint-specific restrictions in each schema.
 export enum AIModel {
   MESHY_5 = "meshy-5",
+  MESHY_6_LITE = "meshy-6-lite",
   MESHY_6 = "meshy-6",
   MESHY_7 = "meshy-7",
   MESHY_7_1 = "meshy-7.1",
@@ -256,7 +260,8 @@ export function creativeLabCredits(product: CreativeLabProduct): { prototype: nu
 export const TEXTURE_CREDITS = 10;
 export const TEXTURE_8K_CREDITS = 15;
 
-// Meshy 7 `ultra_mode` stage-3 surcharge (single image-to-3d only).
+// Ultra geometry surcharge: geometry_resolution "2k" or "4k" (and the
+// deprecated ultra_mode) on meshy-7.1 / latest.
 export const ULTRA_MODE_SURCHARGE_CREDITS = 5;
 
 // UV Unwrap face-count ceiling (oversized meshes are rejected with a 400 — remesh first)
