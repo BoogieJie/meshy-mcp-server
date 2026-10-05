@@ -148,7 +148,7 @@ export interface RemeshApiRequest {
 
 // Retexture API request body
 export interface RetextureApiRequest {
-  enable_original_uv: boolean;
+  enable_original_uv?: boolean;
   enable_pbr: boolean;
   input_task_id?: string;
   model_url?: string;
@@ -190,7 +190,6 @@ export interface UvUnwrapApiRequest {
 // Creative Lab API request bodies (POST /openapi/creative-lab/<product>/v1/{prototype|build})
 export interface CreativeLabPrototypeApiRequest {
   image_url?: string;
-  text?: string;
   image_subject?: string;
   name?: string;
 }
@@ -270,7 +269,7 @@ export interface TextToImageApiRequest {
   ai_model: string;
   prompt: string;
   generate_multi_view: boolean;
-  aspect_ratio: string;
+  aspect_ratio?: string;
   pose_mode?: string;
 }
 

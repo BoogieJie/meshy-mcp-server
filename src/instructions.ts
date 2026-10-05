@@ -25,8 +25,8 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 | meshy_convert | 1 |
 | meshy_resize | 1 |
 | meshy_uv_unwrap | 5 |
-| meshy_creative_lab | 36 (6 + 30) — EXCEPT keycap, which is 62 (12 + 50) |
-| meshy_text_to_image / meshy_image_to_image | nano-banana 3 / nano-banana-2 6 / nano-banana-pro 9 / gpt-image-2: text 9, image 12 |
+| meshy_creative_lab | 36 (6 + 30; lamp is 30 + 6) — EXCEPT keycap, which is 62 (12 + 50) |
+| meshy_text_to_image / meshy_image_to_image | nano-banana 3 / nano-banana-2 6 / nano-banana-pro 9 / GPT Image models (gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst): text 9, image 12 |
 
 ### 3D generation cost (image-to-3d / multi-image-to-3d)
 | ai_model | mesh only | + 2K/4K texture | + 8K texture |
@@ -37,7 +37,7 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 | meshy-t2 (smart-topology, single-image only) | 5 | 15 | 20 |
 
 Ultra geometry (geometry_resolution "2k" or "4k", or the deprecated ultra_mode) adds **+5** on meshy-7.1 / latest. Multi-image takes "2k" but not "4k".
-Legacy ids: meshy-7 is deprecated and billed like meshy-7.1; meshy-5 is served as meshy-6-lite; model_type "lowpoly" is billed like meshy-6 and retires on 2026-10-30 (use smart-topology + meshy-t2).
+Legacy ids: meshy-7 is deprecated and billed like meshy-7.1; meshy-5 retires on 2026-10-10 (use meshy-6-lite); model_type "lowpoly" is billed like meshy-6 and retires on 2026-10-30 (use smart-topology + meshy-t2).
 texture_resolution "8k" costs 5 more than 2K/4K — always confirm it explicitly.
 
 ### Current generation routing
@@ -100,7 +100,7 @@ Trigger: user mentions AR, USDZ, Vision Pro, Quick Look.
 Suggested flow:
 1. Generate model with target_formats:["usdz"]
 2. Add textures (refine or retexture)
-3. Remesh for USDZ format conversion (meshy_remesh, target_formats:["usdz"])
+3. If the model has no USDZ yet, convert it (meshy_convert, target_formats:["usdz"], 1 credit)
 4. Download USDZ
 
 ## Scenario F: Retexture
@@ -109,7 +109,7 @@ Suggested flow:
 1. Ask the user for EXACTLY ONE style input — they are mutually exclusive:
    - text_style_prompt (a description of the style), or
    - image_style_url (one image used as a STYLE reference), or
-   - multiview_image_urls (1–4 photos OF THE SAME OBJECT from different angles; needs ai_model "meshy-7"/"latest")
+   - multiview_image_urls (1–4 photos OF THE SAME OBJECT from different angles; runs on Meshy 7, not meshy-6 / meshy-6-lite)
 2. Apply retexture (meshy_retexture)
 
 ## Scenario H: Cheap Format Conversion / Resize
@@ -127,10 +127,10 @@ Suggested flow:
 3. Wait for completion (task_type "uv-unwrap"), then meshy_download_model (format "glb"). The output is a single GLB with fresh UVs and a placeholder material.
 
 ## Scenario J: Creative Lab Consumer Products (7 products)
-Trigger: user wants a stylized physical-product model from a photo — chibi figure, vinyl figure, brick minifigure, keychain, fridge magnet, keycap, or lamp (lamp also accepts a text prompt).
+Trigger: user wants a stylized physical-product model from a photo — chibi figure, vinyl figure, brick minifigure, keychain, fridge magnet, keycap, or lamp. Every product needs a photo; none take a text prompt.
 Suggested flow:
 1. Confirm the cost: 36 credits for figure / vinyl-figure / brick-figure / keychain / fridge-magnet / lamp, but **62 for keycap**.
-2. Call meshy_creative_lab once with product + a source (file_path / image_url; text is lamp-only). It runs the full prototype→build pipeline internally and returns the final 3D model — the intermediate concept image is internal and is NOT shown to the user. For keycap you may also pass head_size_mm (10–40, default 23).
+2. Call meshy_creative_lab once with product + an image source (file_path / image_url). It runs the full prototype→build pipeline internally and returns the final 3D model — the intermediate concept image is internal and is NOT shown to the user. For keycap you may also pass head_size_mm (10–40, default 23).
 3. Download the result with meshy_download_model (task_type "creative-lab-{product}-build"); for lamp this saves all parts (lamp + base STLs).
 
 ## Scenario K: Cleaner Topology / Part-Separated Geometry (cheaply)

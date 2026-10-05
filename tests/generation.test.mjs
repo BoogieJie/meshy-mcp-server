@@ -363,7 +363,7 @@ test("multi-image forwards multi-view texture images on meshy-7.1", async () => 
 
 for (const [label, tool, input] of [
   ["4k texture on meshy-6-lite", "meshy_image_to_3d", { input_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "4k" }],
-  ["hd_texture on meshy-5", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-5", hd_texture: true }],
+  ["hd_texture on meshy-6-lite", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-6-lite", hd_texture: true }],
   ["8k refine on meshy-6-lite", "meshy_text_to_3d_refine", { preview_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "8k" }],
   ["lowpoly on meshy-6-lite", "meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-6-lite", model_type: "lowpoly" }],
   ["multi-view texture on meshy-6", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-6", texture_image_urls: ["https://example.invalid/t.png"] }],

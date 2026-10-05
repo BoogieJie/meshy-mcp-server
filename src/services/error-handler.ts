@@ -161,7 +161,7 @@ function appendContextSuggestions(message: string, error: unknown, context?: Err
 
   // Analyze-printability + Meshy 6 / Preview model requirement
   if (tool === "meshy_analyze_printability" && (errorText.includes("404") || errorText.includes("not found") || errorText.includes("model older"))) {
-    return message + `\n\n**Fix**: \`meshy_analyze_printability\` requires the upstream task to use Meshy 6 or any Preview model. Tasks generated with Meshy 4/5 are not supported — re-generate with \`ai_model: "meshy-6"\` or pass a \`model_url\` directly instead.`;
+    return message + `\n\n**Fix**: \`meshy_analyze_printability\` requires the upstream task to use Meshy 6 or newer (Meshy 7 / 7.1 included). Tasks generated with Meshy 4/5 are not supported — re-generate with \`ai_model: "latest"\` or pass a \`model_url\` directly instead.`;
   }
 
   return message;

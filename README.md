@@ -29,9 +29,9 @@
 - **8K Textures (v0.5.0)**: `texture_resolution: "2k" | "4k" | "8k"` on image-to-3d, multi-image-to-3d, text-to-3d refine and retexture (8K costs 15 credits vs 10). Replaces the now-deprecated `hd_texture` flag
 - **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 ordered views of the *same object* drive the texture instead of a single style reference (requires Meshy 7)
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters
-- **Creative Lab**: One tool — a photo or a line of text → a finished, print-ready product. **7 products (v0.5.0)**: figure, lamp, keychain, fridge-magnet, vinyl-figure, brick-figure and keycap. Runs prototype→build end-to-end and returns only the final 3D model
+- **Creative Lab**: One tool — a photo → a finished, print-ready product. **7 products (v0.5.0)**: figure, lamp, keychain, fridge-magnet, vinyl-figure, brick-figure and keycap. Runs prototype→build end-to-end and returns only the final 3D model
 - **Format & Size Utilities**: `convert` (format conversion incl. 3MF, 1 credit), `resize` (real-world dimensions, 1 credit), `uv_unwrap` (clean UV layout for external texturing, 5 credits)
-- **2D Image Models**: `text_to_image` / `image_to_image` support `nano-banana`, `nano-banana-2`, `nano-banana-pro` and `gpt-image-2`
+- **2D Image Models**: `text_to_image` / `image_to_image` support `nano-banana`, `nano-banana-2`, `nano-banana-pro`, `gpt-image-2`, `gpt-image-2-5-flare` and `gpt-image-2-5-sunburst`
 - **3D Printability Suite**:
   - `analyze_printability` — free FDM check (watertight, volume, holes, non-manifold edges, degenerate faces)
   - `repair_printability` — 10-credit topology repair, now also accepting **.fbx / .gltf** input (v0.5.0)
@@ -51,7 +51,7 @@
 | `meshy_multi_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` (no Smart Topology) | Meshy 7.1 |
 | `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `latest` (no `meshy-7.1`) | Meshy 7 |
 
-Legacy ids are still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`), `meshy-5` (served as `meshy-6-lite`) and single-image `meshy-t1`.
+Legacy ids still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`) and single-image `meshy-t1`. `meshy-5` retires on 2026-10-10 and is no longer offered: use `meshy-6-lite`.
 
 Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 
@@ -66,7 +66,7 @@ Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_res
 
 Smart Topology (`meshy-t2`) generates directly at `target_polycount` (100–15,000 faces, default 4,000) and skips remeshing. For standard models, `target_polycount` needs `should_remesh: true` and is overridden by `decimation_mode`.
 
-Retexture is 10 credits (15 at 8K). Creative Lab is **36** credits (6 + 30) for every product except **keycap, which is 62** (12 + 50). Other tools: remesh 5, rig 5, animate 3, convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10.
+Retexture is 10 credits (15 at 8K). Creative Lab is **36** credits for every product (6 + 30; lamp is 30 + 6) except **keycap, which is 62** (12 + 50). Other tools: remesh 5, rig 5, animate 3, convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10.
 
 ## Prerequisites
 
