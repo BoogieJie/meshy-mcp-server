@@ -122,7 +122,7 @@ export const RigInputSchema = z.object({
     .describe("Character height in meters; helps scaling"),
   texture_image_url: UrlSchema
     .optional()
-    .describe("The model's UV-unwrapped base color texture (.png, max 20 MB)"),
+    .describe("Deprecated: leave it out when the model has its own textures (Meshy models and most GLBs do), which the rig keeps. Sending it makes this image the only texture and drops the PBR maps. Only for a model_url GLB without textures: its UV-unwrapped base color (.png, max 20 MB)"),
   response_format: ResponseFormatSchema
 }).strict();
 
