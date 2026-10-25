@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `meshy_rig`: `texture_image_url` is described as deprecated. The rig keeps the textures embedded in
+  the model, so leave it out for a textured model: sending it makes that image the only texture and
+  drops the PBR maps. It stays accepted, for a `model_url` GLB that has no textures
+
 ## [0.6.5] - 2026-10-21
 
 ### Added
